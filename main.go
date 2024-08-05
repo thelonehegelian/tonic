@@ -2,6 +2,8 @@ package main
 
 // we use net to make a tcp connection but not http
 
+// 1. handle GET request
+
 import (
 	// "bufio"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"strings"
 )
 
+const sampleBody = `<html><body><h1>Hello World</h1></body></html>`
 const listeningAddress = "localhost:8080"
 
 /*
@@ -34,8 +37,8 @@ func main() {
 	if err != nil {
 		fmt.Println("Error listening:", err.Error())
 	}
-	fmt.Println(listener)
 
+	fmt.Println("Listening on", listeningAddress)
 	defer listener.Close()
 
 	// keep the connection open
@@ -45,39 +48,47 @@ func main() {
 		if err != nil {
 			fmt.Println("Error accepting:", err.Error())
 		}
-		go handleRequest(conn)
+		fmt.Println("Accepted connection")
 
+		go handleRequest(conn)
 	}
 }
 
 func handleRequest(conn net.Conn) {
 	buffer := make([]byte, 1024)
 	conn.Read(buffer)
-	request := string(buffer)
-	if request == "" {
+	req := string(buffer)
+	if req == "" {
 		fmt.Println("Empty Request")
+		return
 	}
-	parseHtmlRequest(request)
-	sendResponse(conn)
-	// if r.Method == "POST" {
-	// }
 
+	method := getRequestMethod(req)
+	fmt.Println("Method:", method)
+
+	var response *Response
+	switch method {
+	case "GET":
+		request := parseGetRequest(req)
+		response = createResponse(200, map[string]string{"Content-Type": "text/html; charset=utf-8"}, request.Body)
+	case "POST":
+		request := parsePostRequest(req)
+		response = createResponse(200, map[string]string{"Content-Type": "application/json"}, request.Body)
+	default:
+		response = createResponse(405, map[string]string{"Content-Type": "text/plain"}, "Method Not Allowed")
+	}
+
+	sendResponse(conn, response)
+	fmt.Println("Response:", response)
 }
 
 func parseJsonFromString(s string) {
-
-}
-func handlePostRequest(r *IncomingRequest) {
-	if r.Headers["Content-Type"] == "application/json" {
-		parseJsonFromString(r.Body)
-	}
 }
 
-type IncomingRequest struct {
+type Request struct {
 	Method  string
 	URI     string
 	Version string
-
 	Headers map[string]string
 	Body    string
 }
@@ -88,12 +99,34 @@ type Response struct {
 	Body       string
 }
 
-func sendResponse(conn net.Conn) {
-	body := "<html><body><h1>Hello World</h1></body></html>"
-	statusline := "HTTP/1.1 200 OK"
-	headers := make(map[string]string)
-	headers["Content-Type"] = "text/html; charset=utf-8"
-	headers["Content-Length"] = fmt.Sprint(len(body))
+func createResponse(statusCode int, headers map[string]string, body string) *Response {
+	return &Response{
+		StatusCode: statusCode,
+		Headers:    headers,
+		Body:       body,
+	}
+}
+
+func createStatusLine(statusCode int) string {
+	switch statusCode {
+	case 200:
+		return "HTTP/1.1 200 OK"
+	case 404:
+		return "HTTP/1.1 404 Not Found"
+	case 500:
+		return "HTTP/1.1 500 Internal Server Error"
+	case 405:
+		return "HTTP/1.1 405 Method Not Allowed"
+	default:
+		return "HTTP/1.1 200 OK"
+	}
+}
+
+func sendResponse(conn net.Conn, responseObject *Response) {
+
+	statusline := createStatusLine(responseObject.StatusCode)
+	headers := responseObject.Headers
+	headers["Content-Length"] = fmt.Sprint(len(sampleBody))
 	/*
 		Example:
 		HTTP/1.1 200 OK
@@ -108,13 +141,14 @@ func sendResponse(conn net.Conn) {
 		conn.Write([]byte(k + ": " + v + "\r\n"))
 	}
 	conn.Write([]byte("\r\n"))
-	conn.Write([]byte(body))
+	conn.Write([]byte(responseObject.Body))
 }
 
-func parseHtmlRequest(req string) *IncomingRequest {
-	lines := strings.Split(req, "\r\n")
-	requestLine := lines[0]
-	parts := strings.Fields(requestLine)
+func getRequestMethod(req string) string {
+	return strings.Split(req, " ")[0]
+}
+
+func parseHeaders(lines []string) map[string]string {
 
 	headers := make(map[string]string)
 	for _, line := range lines[1:] {
@@ -124,20 +158,47 @@ func parseHtmlRequest(req string) *IncomingRequest {
 		}
 		// Host: localhost:8080
 		// User-Agent: curl/7.64.1
-		headerParts := strings.Split(line, ":")
+		headersParts := strings.Split(line, ":")
 		// key : value
-		headers[headerParts[0]] = headerParts[1]
-		fmt.Printf("%s : %s\n", headerParts[0], headerParts[1])
+		headers[headersParts[0]] = headersParts[1]
 	}
 
+	return headers
+}
+
+func parseGetRequest(req string) *Request {
+	lines := strings.Split(req, "\r\n")
+	requestLine := lines[0]
+	parts := strings.Fields(requestLine)
+	headers := parseHeaders(lines[1:])
+
+	request := &Request{
+		Method:  parts[0],
+		URI:     parts[1],
+		Version: parts[2],
+		Headers: headers,
+		Body:    sampleBody,
+	}
+	return request
+}
+
+func parseBody(lines []string) string {
 	// body example: {"name": "John Doe", "email": "john.doe@example.com"}
-	body := ""
-	if len(lines) > len(headers)+2 { // Check if there's a body, considering headers and blank line
-		body = strings.Join(lines[len(headers)+2:], "\r\n") // Join lines after the headers if they exist
-		fmt.Println("Body:", body)
+	// if body is empty
+	if len(lines) == 0 {
+		return ""
 	}
+	return strings.Join(lines, "\r\n")
+}
+func parsePostRequest(req string) *Request {
+	lines := strings.Split(req, "\r\n")
+	requestLine := lines[0]
+	parts := strings.Fields(requestLine)
 
-	parsedRequest := &IncomingRequest{
+	headers := parseHeaders(lines[1:])
+	body := parseBody(lines[len(headers)+2:])
+
+	parsedRequest := &Request{
 		Method:  parts[0],
 		URI:     parts[1],
 		Version: parts[2],
@@ -146,5 +207,4 @@ func parseHtmlRequest(req string) *IncomingRequest {
 	}
 
 	return parsedRequest
-
 }
