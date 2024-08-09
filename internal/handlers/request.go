@@ -1,6 +1,16 @@
 package handlers
 
-import "strings"
+import (
+	"fmt"
+	"net"
+	"strings"
+)
+
+type Response struct {
+	StatusCode int
+	Headers    map[string]string
+	Body       string
+}
 
 type Request struct {
 	Method  string
@@ -10,6 +20,53 @@ type Request struct {
 	Body    string
 }
 
+type ContextManager struct {
+	Writer          net.Conn
+	Req             Request
+	Params          map[string]string
+	Keys            map[string]interface{}
+	Errors          []error
+	AcceptedContent []string
+	FullPath        string
+}
+
+func (c *ContextManager) SendResponse(statusCode int, body string) {
+
+	statusline := c.CreateStatusLine(statusCode)
+	headers := c.Req.Headers
+	headers["Content-Length"] = fmt.Sprint(len(c.Req.Body))
+	/*
+		Example:
+		HTTP/1.1 200 OK
+		Content-Type: text/html; charset=utf-8
+		Content-Length: 13
+
+		<html><body><h1>Hello World</h1></body></html>
+	*/
+
+	c.Writer.Write([]byte(statusline + "\r\n"))
+	for k, v := range headers {
+		c.Writer.Write([]byte(k + ": " + v + "\r\n"))
+	}
+	c.Writer.Write([]byte("\r\n"))
+	c.Writer.Write([]byte(body))
+}
+
+func (c *ContextManager) CreateStatusLine(statusCode int) string {
+
+	switch statusCode {
+	case 200:
+		return "HTTP/1.1 200 OK"
+	case 404:
+		return "HTTP/1.1 404 Not Found"
+	case 500:
+		return "HTTP/1.1 500 Internal Server Error"
+	case 405:
+		return "HTTP/1.1 405 Method Not Allowed"
+	default:
+		return "HTTP/1.1 200 OK"
+	}
+}
 
 // ? what should the handler function take
 // the handler function should have a context which would have all the information about the request
