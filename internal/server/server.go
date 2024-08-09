@@ -4,10 +4,32 @@ import (
 	"fmt"
 	"net"
 	"tonic/internal/handlers"
-	// "tonic/internal/server"
 )
 
-func HandleRequest(conn net.Conn) {
+// findHandler finds a handler for a given path in the router.
+//
+// Parameters:
+// - path: The path to search for a handler.
+// - router: The router to search in.
+//
+// Returns:
+// - *handlers.Route: The handler for the given path if found, nil otherwise.
+func findHandler(path string, router *handlers.Router) *handlers.Route {
+	if router == nil {
+		return nil
+	}
+
+	for _, route := range router.Routes {
+		if route.Path == path {
+			return &route
+		}
+	}
+
+	return nil
+}
+
+// Entry point of the app
+func HandleRequest(conn net.Conn, router *handlers.Router) {
 	buffer := make([]byte, 1024)
 	conn.Read(buffer)
 	req := string(buffer)
@@ -16,7 +38,12 @@ func HandleRequest(conn net.Conn) {
 		return
 	}
 
+	reqObject := handlers.ParseRequest(req)
+	handler := findHandler(reqObject.URI, router)
+	handler.Handler()
+
 	method := handlers.GetRequestMethod(req)
+
 	fmt.Println("Method:", method)
 
 	var response *Response
