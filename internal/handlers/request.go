@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -105,21 +106,22 @@ func GetRequestMethod(req string) string {
 	return strings.Split(req, " ")[0]
 }
 
-func ParseHeaders(lines []string) map[string]string {
+func ParseHeaders(lines []string) (map[string]string, error) {
 	headers := make(map[string]string)
 	// take the first line and split by whitespace
 
 	requestLine := strings.Fields(lines[0])
 	// Example: GET / HTTP 1.1 ...
-	if len(requestLine) >= 3 {
-		method := requestLine[0]
-		path := requestLine[1]
-		version := requestLine[2]
-
-		headers["Method"] = method
-		headers["Path"] = path
-		headers["Version"] = version
+	if len(requestLine) < 3 {
+		return nil, errors.New("Invalid Request Line")
 	}
+	method := requestLine[0]
+	path := requestLine[1]
+	version := requestLine[2]
+
+	headers["Method"] = method
+	headers["Path"] = path
+	headers["version"] = version
 
 	for _, line := range lines[1:] {
 		// if we hit an empty line, headers are done
@@ -136,7 +138,7 @@ func ParseHeaders(lines []string) map[string]string {
 		headers[key] = value
 	}
 
-	return headers
+	return headers, nil
 }
 
 func ParseBody(lines []string) string {
