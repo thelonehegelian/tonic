@@ -31,7 +31,6 @@ type ContextManager struct {
 }
 
 func (c *ContextManager) SendResponse(statusCode int, body string) {
-
 	statusline := c.CreateStatusLine(statusCode)
 	headers := c.Req.Headers
 	headers["Content-Length"] = fmt.Sprint(len(c.Req.Body))
@@ -53,7 +52,6 @@ func (c *ContextManager) SendResponse(statusCode int, body string) {
 }
 
 func (c *ContextManager) CreateStatusLine(statusCode int) string {
-
 	switch statusCode {
 	case 200:
 		return "HTTP/1.1 200 OK"
@@ -109,6 +107,20 @@ func GetRequestMethod(req string) string {
 
 func ParseHeaders(lines []string) map[string]string {
 	headers := make(map[string]string)
+	// take the first line and split by whitespace
+
+	requestLine := strings.Fields(lines[0])
+	// Example: GET / HTTP 1.1 ...
+	if len(requestLine) >= 3 {
+		method := requestLine[0]
+		path := requestLine[1]
+		version := requestLine[2]
+
+		headers["Method"] = method
+		headers["Path"] = path
+		headers["Version"] = version
+	}
+
 	for _, line := range lines[1:] {
 		// if we hit an empty line, headers are done
 		if line == "" {
@@ -116,9 +128,12 @@ func ParseHeaders(lines []string) map[string]string {
 		}
 		// Host: localhost:8080
 		// User-Agent: curl/7.64.1
-		headersParts := strings.Split(line, ":")
+		headersParts := strings.SplitN(line, ":", 2) // handles the case with port
+		// remove whitespace
+		key := strings.TrimSpace(headersParts[0])
+		value := strings.TrimSpace(headersParts[1])
 		// key : value
-		headers[headersParts[0]] = headersParts[1]
+		headers[key] = value
 	}
 
 	return headers
