@@ -106,6 +106,37 @@ func GetRequestMethod(req string) string {
 	return strings.Split(req, " ")[0]
 }
 
+func isMethodAllowed(method string) bool {
+	allowedMethods := []string{"GET", "POST", "PUT", "DELETE"}
+	for _, m := range allowedMethods {
+		if m == method {
+			return true
+		}
+	}
+	return false
+}
+
+func isHttpVersionAllowed(version string) bool {
+	httpVersions := []string{"HTTP/1.1", "HTTP/2"}
+
+	for _, v := range httpVersions {
+		if v == version {
+			return true
+		}
+	}
+	return false
+}
+
+func isPathValid(path string) bool {
+	if path == "" {
+		return false
+	}
+	if path[0] != '/' {
+		return false
+	}
+	return true
+}
+
 func ParseHeaders(lines []string) (map[string]string, error) {
 	headers := make(map[string]string)
 	// take the first line and split by whitespace
@@ -115,13 +146,23 @@ func ParseHeaders(lines []string) (map[string]string, error) {
 	if len(requestLine) < 3 {
 		return nil, errors.New("Invalid Request Line")
 	}
+	if !isMethodAllowed(requestLine[0]) {
+		return nil, errors.New("Method not allowed")
+	}
+	if !isPathValid(requestLine[1]) {
+		return nil, errors.New("Path is not valid")
+	}
+	if !isHttpVersionAllowed(requestLine[2]) {
+		return nil, errors.New("HTTP version not supported")
+	}
+
 	method := requestLine[0]
 	path := requestLine[1]
 	version := requestLine[2]
 
 	headers["Method"] = method
 	headers["Path"] = path
-	headers["version"] = version
+	headers["Version"] = version
 
 	for _, line := range lines[1:] {
 		// if we hit an empty line, headers are done
@@ -132,7 +173,7 @@ func ParseHeaders(lines []string) (map[string]string, error) {
 		// User-Agent: curl/7.64.1
 		headersParts := strings.SplitN(line, ":", 2) // handles the case with port
 		// remove whitespace
-		key := strings.TrimSpace(headersParts[0])
+		key := strings.ToUpper(string(headersParts[0][0])) + strings.TrimSpace(headersParts[0][1:])
 		value := strings.TrimSpace(headersParts[1])
 		// key : value
 		headers[key] = value
