@@ -1,6 +1,6 @@
-# Tonic HTTP Framework
+# Tonic Web Framework
 
-Tonic is a minimalist HTTP framework implemented in Go. The framework is currently under construction and aims to provide a lightweight structure for handling HTTP requests and responses.
+Tonic is a minimalist Web framework implemented (at least planned) in Go. The framework is currently under construction and aims to provide a lightweight structure for handling HTTP requests and responses (to start with).
 
 ## Table of Contents
 
